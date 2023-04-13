@@ -14,5 +14,70 @@
 	<canvas id="galactic-canvas" width="1920" height="1080"></canvas>
 
 	<h1>Galactic Arts</h1>
+
+	<div class="controls">
+		<div class="control">
+			<button id="save-to-png">Save to PNG</button>
+		</div>
+
+		<div class="control">
+			<label for="rotation">Rotation speed</label>
+			<input type="range" id="rotation-speed" min="0" max="0.05" step="0.001">
+		</div>
+
+		<div class="control">
+			<label for="clear-canvas-on-draw">Clear canvas on draw</label>
+			<input type="checkbox" id="clear-canvas-on-draw" checked>
+		</div>
+
+		<div class="control">
+			<label for="blend-mode">Blend mode</label>
+			<select id="blend-mode">
+				<option value="none">None</option>
+				<option value="normal">Normal</option>
+				<option value="multiply">Multiply</option>
+				<option value="additive">Additive</option>
+				<option value="subtractive">Subtractive</option>
+
+				<option value="screen">Screen</option>
+				<option value="overlay">Overlay</option>
+				<option value="darken">Darken</option>
+				<option value="lighten">Lighten</option>
+				<option value="color-dodge">Color dodge</option>
+				<option value="color-burn">Color burn</option>
+				<option value="hard-light">Hard light</option>
+				<option value="soft-light">Soft light</option>
+				<option value="difference">Difference</option>
+				<option value="exclusion">Exclusion</option>
+				<option value="hue">Hue</option>
+				<option value="saturation">Saturation</option>
+				<option value="color">Color</option>
+				<option value="luminosity">Luminosity</option>
+			</select>
+		</div>
+
+		<div class="control">
+			<label for="canvas-background">Canvas background</label>
+			<input type="color" id="canvas-background" value="#000000">
+		</div>
+
+		<!--<tr>                                                                -->
+		<!--    <td>                                                            -->
+		<!--        <label for="galactic-fov">FOV</label>                       -->
+		<!--    </td>                                                           -->
+		<!--    <td>                                                            -->
+		<!--        <input type="number" id="galactic-fov" value="45">          -->
+		<!--    </td>                                                           -->
+		<!--</tr>                                                               -->
+
+		<!--<tr>                                                                -->
+		<!--    <td>                                                            -->
+		<!--        <label for="galactic-ambient">Ambient</label>               -->
+		<!--    </td>                                                           -->
+		<!--    <td>                                                            -->
+		<!--        <input type="text" id="galactic-ambient" value="#000000">   -->
+		<!--    </td>                                                           -->
+		<!--</tr>                                                               -->
+	</div>
 </body>
 </html>

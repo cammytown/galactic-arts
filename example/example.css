@@ -1,0 +1,25 @@
+body {
+	background: #111;
+	color: #eee;
+}
+
+.controls {
+	background: #222;
+	color: #eee;
+}
+
+.controls .control {
+	display: inline-block;
+	padding: 10px;
+	color: #eee;
+}
+
+.controls .control label {
+	color: #eee;
+}
+
+.controls .control input[type="text"] {
+	width: 100px;
+	background: #444;
+	color: #eee;
+}

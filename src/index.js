@@ -1,12 +1,18 @@
-//import '../node_modules/gl-matrix/gl-matrix.js';
 //import { mat4 } from 'gl-matrix';
-//import '../node_modules/gl-matrix/mat4.js';
-
 var mat4 = glMatrix.mat4; //@TODO hack
 
 class GalacticArts {
 	canvas = document.getElementById('galactic-canvas');
 	gl = this.canvas.getContext('webgl2');
+
+	// Background (last frame) shaders
+	backgroundShaderProgram = null;
+	backgroundVertexShader = null;
+	backgroundFragmentShader = null;
+	offscreen = null; //@REVISIT naming
+	backgroundQuad = null;
+	backgroundPositionAttribute = null;
+	backgroundTexCoordAttribute = null;
 
 	// Shaders
 	shaderProgram = null;
@@ -18,18 +24,25 @@ class GalacticArts {
 	colorBuffer = null;
 
 	// Matrices
-	//projectionMatrix = null;
-	//viewMatrix = null;
-	//modelMatrix = null;
-	//modelViewMatrix = null;
-	//modelViewProjectionMatrix = null;
+	projectionMatrix = null;
+	viewMatrix = null;
+	modelMatrix = null;
+	modelViewMatrix = null;
+	modelViewProjectionMatrix = null;
 
-	// Camera
-	rotation = 0;
+
+	// Canvas controls
+	controls = {
+		clearCanvasOnDraw: true,
+		rotation: 0,
+		rotationSpeed: 0.0,
+		blendMode: 'none',
+		savingToPNG: false,
+	}
 
 	// Stars
 	stars = [];
-	
+
 	// Value ranges
 	ranges = {};
 
@@ -47,34 +60,49 @@ class GalacticArts {
 	loadStars() {
 		// Load HYG star data
 		// http://www.astronexus.com/hyg
-
-		// Load stars
+		//@TODO revisit is this necessary for a local file? use fetch?
 		var xhr = new XMLHttpRequest();
 		xhr.open('GET', '../data/hygdata_v3.csv', true);
 		xhr.onload = function() {
 			if(xhr.status === 200) {
-				var stars = xhr.responseText.split('\n');
+				var starRows = xhr.responseText.split('\n');
 
 				// Extract names from and remove first line
-				var names = stars[0].split(',');
-				stars.shift();
+				var names = starRows[0].split(',');
+				starRows.shift();
 
-				for(var star of stars) {
-					star = star.split(',');
+				for(var starRow of starRows) {
+					// Check if row is empty
+					//@REVISIT better check?
+					if(starRow === '') {
+						continue;
+					}
+
+					// Split row's columns into array
+					starRow = starRow.split(',');
+
+					//console.log(starRow);
 
 					// Add star to stars array
 					//@TODO only extract properties user wants
 					var star = {
-						id: parseFloat(star[names.indexOf('id')]),
-						x: parseFloat(star[names.indexOf('x')]),
-						y: parseFloat(star[names.indexOf('y')]),
-						z: parseFloat(star[names.indexOf('z')]),
-						colorIndex: parseFloat(star[names.indexOf('ci')]),
-						magnitude: parseFloat(star[names.indexOf('mag')]),
-						absMagnitude: parseFloat(star[names.indexOf('absmag')]),
-						luminosity: parseFloat(star[names.indexOf('lum')]),
-						spectralClass: star[names.indexOf('spect')],
-						constellation: star[names.indexOf('con')],
+						id: parseFloat(starRow[names.indexOf('id')]),
+						x: parseFloat(starRow[names.indexOf('x')]),
+						y: parseFloat(starRow[names.indexOf('y')]),
+						z: parseFloat(starRow[names.indexOf('z')]),
+						colorIndex: parseFloat(starRow[names.indexOf('ci')]),
+						magnitude: parseFloat(starRow[names.indexOf('mag')]),
+						absMagnitude: parseFloat(starRow[names.indexOf('absmag')]),
+						luminosity: parseFloat(starRow[names.indexOf('lum')]),
+						spectralClass: starRow[names.indexOf('spect')],
+						constellation: starRow[names.indexOf('con')],
+					}
+
+					if(isNaN(star.id)) {
+						console.log(starRows.indexOf(starRow));
+						console.log(starRow);
+						return;
+						//continue;
 					}
 
 					this.stars.push(star);
@@ -96,8 +124,7 @@ class GalacticArts {
 					}
 				}
 
-				console.log(this.ranges)
-
+				//console.log(this.ranges)
 				//this.stars = this.stars.slice(0, 10);
 				//console.log(stars.length);
 
@@ -126,26 +153,11 @@ class GalacticArts {
 			throw new Error('WebGL is not supported');
 		}
 
-		// Set clear color
-		this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
+		this.compileShaders();
+		this.linkShaders();
 
-		// Enable depth testing
-		this.gl.enable(this.gl.DEPTH_TEST);
-
-		// Near things obscure far things
-		this.gl.depthFunc(this.gl.LEQUAL);
-
-		// Clear the canvas before we start drawing on it.
-		this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
-
-		// Set viewport
-		this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-
-		//this.setupMatrices();
-		this.setupShaders();
+		this.setupMatrices();
 		this.setupBuffers();
-		this.setupAttributes();
-		//this.setupUniforms();
 
 		// Use shader program
 		this.gl.useProgram(this.shaderProgram);
@@ -154,6 +166,149 @@ class GalacticArts {
 		if(this.gl.getError() != this.gl.NO_ERROR) {
 			console.log('Error initializing WebGL');
 		}
+
+		this.setupUniforms();
+
+		// Enable depth testing
+		this.gl.enable(this.gl.DEPTH_TEST);
+
+		// Near things obscure far things
+		this.gl.depthFunc(this.gl.LEQUAL);
+
+		// Set clear color
+		this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+		// Clear the canvas before we start drawing on it.
+		this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+
+		// Set viewport
+		this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+
+		// Enable blending
+		this.gl.enable(this.gl.BLEND);
+	}
+
+	compileShaders() {
+		// Set up shaders
+		this.vertexShader = this.gl.createShader(this.gl.VERTEX_SHADER);
+		this.gl.shaderSource(this.vertexShader, `
+			attribute vec4 aVertexPosition;
+			attribute vec4 aVertexColor;
+			varying vec4 vColor;
+
+			uniform mat4 uModelViewMatrix;
+			uniform mat4 uProjectionMatrix;
+
+			void main(void) {
+				gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+				vColor = aVertexColor;
+			}
+		`);
+
+
+		//this.gl.shaderSource(this.vertexShader, `
+		//    attribute vec4 aVertexPosition;
+		//    attribute vec4 aVertexColor;
+		//    varying vec4 vColor;
+
+		//    void main(void) {
+		//        gl_Position = aVertexPosition;
+		//        vColor = aVertexColor;
+		//    }
+		//`);
+
+		this.fragmentShader = this.gl.createShader(this.gl.FRAGMENT_SHADER);
+		this.gl.shaderSource(this.fragmentShader, `
+			precision mediump float;
+			varying vec4 vColor;
+
+			void main(void) {
+				gl_FragColor = vColor;
+			}
+		`);
+		//this.gl.shaderSource(this.fragmentShader, `
+		//    precision mediump float;
+		//    varying vec4 vColor;
+
+		//    void main(void) {
+		//        gl_FragColor = vColor;
+		//    }
+		//`);
+
+		// Compile shaders
+		this.gl.compileShader(this.vertexShader);
+		this.gl.compileShader(this.fragmentShader);
+
+		// Background (last frame) shader
+		this.offscreen = this.createFramebuffer(this.canvas.width, this.canvas.height);
+		this.backgroundQuad = this.createBackgroundQuad();
+
+		// Set up shaders
+		this.backgroundVertexShader = this.gl.createShader(this.gl.VERTEX_SHADER);
+		this.gl.shaderSource(this.backgroundVertexShader, `
+			attribute vec2 a_position;
+			attribute vec2 a_texCoord;
+			varying vec2 v_texCoord;
+			void main() {
+			  gl_Position = vec4(a_position, 0, 1);
+			  v_texCoord = a_texCoord;
+			}
+		`);
+
+		this.backgroundFragmentShader = this.gl.createShader(this.gl.FRAGMENT_SHADER);
+		this.gl.shaderSource(this.backgroundFragmentShader, `
+			precision mediump float;
+			uniform sampler2D u_texture;
+			varying vec2 v_texCoord;
+			void main() {
+			  gl_FragColor = texture2D(u_texture, v_texCoord);
+			}
+		`);
+
+		// Compile shaders
+		this.gl.compileShader(this.backgroundVertexShader);
+		this.gl.compileShader(this.backgroundFragmentShader);
+	}
+
+	linkShaders() {
+		// Create shader program
+		this.shaderProgram = this.gl.createProgram();
+		this.gl.attachShader(this.shaderProgram, this.vertexShader);
+		this.gl.attachShader(this.shaderProgram, this.fragmentShader);
+		this.gl.linkProgram(this.shaderProgram);
+
+		// Check if shader program linked successfully
+		if(!this.gl.getProgramParameter(this.shaderProgram, this.gl.LINK_STATUS)) {
+			throw new Error(
+				'Unable to initialize the shader program: '
+				+ this.gl.getProgramInfoLog(this.shaderProgram)
+			);
+		}
+
+		// Create background (last frame) shader program
+		this.backgroundShaderProgram = this.gl.createProgram();
+		this.gl.attachShader(this.backgroundShaderProgram, this.backgroundVertexShader);
+		this.gl.attachShader(this.backgroundShaderProgram, this.backgroundFragmentShader);
+		this.gl.linkProgram(this.backgroundShaderProgram);
+
+		// Check if shader program linked successfully
+		if(!this.gl.getProgramParameter(this.backgroundShaderProgram, this.gl.LINK_STATUS)) {
+			throw new Error(
+				'Unable to initialize the background shader program: '
+				+ this.gl.getProgramInfoLog(this.backgroundShaderProgram)
+			);
+		}
+
+		// Get attribute locations for the background shader program
+		this.backgroundPositionAttribute = this.gl.getAttribLocation(
+			this.backgroundShaderProgram,
+			"a_position"
+		);
+
+		this.backgroundTexCoordAttribute = this.gl.getAttribLocation(
+			this.backgroundShaderProgram,
+			"a_texCoord"
+		);
 	}
 
 	setupMatrices() {
@@ -188,49 +343,6 @@ class GalacticArts {
 		mat4.transpose(this.normalMatrix, this.normalMatrix);
 	}
 
-	setupShaders() {
-		// Set up shaders
-		this.vertexShader = this.gl.createShader(this.gl.VERTEX_SHADER);
-		this.gl.shaderSource(this.vertexShader, `
-			attribute vec4 aVertexPosition;
-			attribute vec4 aVertexColor;
-			varying vec4 vColor;
-
-			void main(void) {
-				gl_Position = aVertexPosition;
-				vColor = aVertexColor;
-			}
-		`);
-
-		this.fragmentShader = this.gl.createShader(this.gl.FRAGMENT_SHADER);
-		this.gl.shaderSource(this.fragmentShader, `
-			precision mediump float;
-			varying vec4 vColor;
-
-			void main(void) {
-				gl_FragColor = vColor;
-			}
-		`);
-
-		// Compile shaders
-		this.gl.compileShader(this.vertexShader);
-		this.gl.compileShader(this.fragmentShader);
-
-		// Create shader program
-		this.shaderProgram = this.gl.createProgram();
-		this.gl.attachShader(this.shaderProgram, this.vertexShader);
-		this.gl.attachShader(this.shaderProgram, this.fragmentShader);
-		this.gl.linkProgram(this.shaderProgram);
-
-		// Check if shader program linked successfully
-		if(!this.gl.getProgramParameter(this.shaderProgram, this.gl.LINK_STATUS)) {
-			throw new Error(
-				'Unable to initialize the shader program: '
-				+ this.gl.getProgramInfoLog(this.shaderProgram)
-			);
-		}
-	}
-
 	setupBuffers() {
 		// Set up vertex buffer
 		this.vertexBuffer = this.gl.createBuffer();
@@ -239,7 +351,7 @@ class GalacticArts {
 		// Add stars to vertex buffer
 		var vertices = [];
 		for(var star of this.stars) {
-			var scale = 0.0022;
+			var scale = 0.22;
 
 			// Add star to vertex buffer
 			vertices.push(star.x * scale, star.y * scale, star.z * scale);
@@ -249,6 +361,7 @@ class GalacticArts {
 			new Float32Array(vertices),
 			this.gl.STATIC_DRAW
 		);
+
 		// Set up vertex position attribute
 		this.vertexPositionAttribute = this.gl.getAttribLocation(
 			this.shaderProgram,
@@ -300,25 +413,6 @@ class GalacticArts {
 			0,
 			0
 		);
-
-		//// Set up normal buffer
-		//this.normalBuffer = this.gl.createBuffer();
-		//this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.normalBuffer);
-
-		//// Add normals to normal buffer
-		//var normals = [];
-		//for(var star of this.stars) {
-		//    // Add normal to normal buffer
-		//    normals.push(star.nx, star.ny, star.nz);
-		//}
-		//this.gl.bufferData(
-		//    this.gl.ARRAY_BUFFER,
-		//    new Float32Array(normals),
-		//    this.gl.STATIC_DRAW
-		//);
-	}
-
-	setupAttributes() {
 	}
 
 	setupUniforms() {
@@ -354,81 +448,271 @@ class GalacticArts {
 			false,
 			this.modelViewProjectionMatrix
 		);
+	}
 
-		// Set up normal matrix uniform
-		this.normalMatrixUniform = this.gl.getUniformLocation(
-			this.shaderProgram,
-			'uNormalMatrix'
-		);
-		this.gl.uniformMatrix4fv(
-			this.normalMatrixUniform,
-			false,
-			this.normalMatrix
-		);
+	/**
+	 * Create a framebuffer for drawing frame to texture.
+	 * @param {number} width - Width of framebuffer.
+	 * @param {number} height - Height of framebuffer.
+	 * @returns {WebGLFramebuffer} Framebuffer.
+	 */
+	createFramebuffer(width, height) {
+		var gl = this.gl;
 
-		// Set up lighting
-		//this.ambientLight = [0.2, 0.2, 0.2];
-		//this.directionalLightColor = [1.0, 1.0, 1.0];
-		//this.directionalVector = [0.85, 0.8, 0.75];
+		const framebuffer = gl.createFramebuffer();
+		gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
 
-		// Set up ambient light uniform
-		this.ambientLightUniform = this.gl.getUniformLocation(
-			this.shaderProgram,
-			'uAmbientLight'
-		);
-		this.gl.uniform3fv(this.ambientLightUniform, this.ambientLight);
+		const texture = gl.createTexture();
+		gl.bindTexture(gl.TEXTURE_2D, texture);
 
-		// Set up directional light color uniform
-		this.directionalLightColorUniform = this.gl.getUniformLocation(
-			this.shaderProgram,
-			'uDirectionalLightColor'
-		);
-		this.gl.uniform3fv(
-			this.directionalLightColorUniform,
-			this.directionalLightColor
-		);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
-		// Set up directional vector uniform
-		this.directionalVectorUniform = this.gl.getUniformLocation(
-			this.shaderProgram,
-			'uDirectionalVector'
-		);
-		this.gl.uniform3fv(
-			this.directionalVectorUniform,
-			this.directionalVector
-		);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+
+		gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+		gl.bindTexture(gl.TEXTURE_2D, null);
+
+		return { framebuffer, texture };
+	}
+
+	/**
+	 * Create a quad for drawing to the screen.
+	 * @returns {WebGLBuffer} Buffer.
+	 */
+	createBackgroundQuad() {
+		var gl = this.gl;
+
+		const vertices = new Float32Array([
+			-1, -1, 0, 0,
+			1, -1, 1, 0,
+			-1, 1, 0, 1,
+			1, 1, 1, 1,
+		]);
+
+		const buffer = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+		gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+		return buffer;
+	}
+
+	/**
+	 * Draw the previous frame.
+	 * @returns {void}
+	 */
+	drawLastFrame() {
+		var gl = this.gl;
+
+		gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+		gl.useProgram(this.backgroundShaderProgram);
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.backgroundQuad);
+		gl.vertexAttribPointer(this.backgroundPositionAttribute, 2, gl.FLOAT, false, 16, 0);
+		gl.vertexAttribPointer(this.backgroundTexCoordAttribute, 2, gl.FLOAT, false, 16, 8);
+		gl.enableVertexAttribArray(this.backgroundPositionAttribute);
+		gl.enableVertexAttribArray(this.backgroundTexCoordAttribute);
+		gl.activeTexture(gl.TEXTURE0);
+		gl.bindTexture(gl.TEXTURE_2D, this.offscreen.texture);
+		gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+	}
+
+	drawStars() {
+		var gl = this.gl;
+
+		// Set up shader program
+		gl.useProgram(this.shaderProgram);
+
+		// Set up vertex buffer
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+		gl.vertexAttribPointer(this.vertexPositionAttribute, 3, gl.FLOAT, false, 0, 0);
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
+		gl.vertexAttribPointer(this.vertexColorAttribute, 4, gl.FLOAT, false, 0, 0);
+
+		// Draw the scene
+		this.gl.drawArrays(this.gl.POINTS, 0, this.stars.length);
 	}
 
 	/**
 	 * Draw the scene.
 	 */
 	draw() {
+		var gl = this.gl;
+
+		// Disable blending
+		gl.disable(gl.BLEND);
+
 		// Clear the canvas
-		this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+		// Enable blending
+		gl.enable(gl.BLEND);
+
+		if(!this.controls.clearCanvasOnDraw) {
+			//gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+			//gl.clear(gl.DEPTH_BUFFER_BIT);
+			this.drawLastFrame();
+
+			// Bind the framebuffer
+			gl.bindFramebuffer(gl.FRAMEBUFFER, this.offscreen.framebuffer);
+		}
+
+		this.drawStars();
+
+		if(!this.controls.clearCanvasOnDraw) {
+			// Unbind the framebuffer
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+		}
+
+		if(this.controls.savingToPNG) {
+			this.outputToPNG();
+			this.controls.savingToPNG = false;
+		}
 
 		// Update rotation
-		//this.updateRotation();
+		this.updateRotation();
 
-		// Draw the scene
-		this.gl.drawArrays(this.gl.POINTS, 0, this.stars.length);
+		// Request next frame
+		requestAnimationFrame(this.draw.bind(this));
+
+		// Update stats
+		//this.stats.update();
 	}
 
+
+	/**
+	 * Update rotation.
+	 * @private
+	 * @returns {void}
+	 */
 	updateRotation() {
 		// Update rotation
-		this.rotation += 0.01;
+		this.controls.rotation += this.controls.rotationSpeed;
 
 		// Update model-view matrix
 		this.modelViewMatrix = mat4.create();
-		mat4.translate(this.modelViewMatrix, this.modelViewMatrix, [0.0, 0.0, -20.0]);
-		mat4.rotate(this.modelViewMatrix, this.modelViewMatrix, this.rotation, [0, 1, 0]);
-		mat4.rotate(this.modelViewMatrix, this.modelViewMatrix, this.rotation, [1, 0, 0]);
-		mat4.rotate(this.modelViewMatrix, this.modelViewMatrix, this.rotation, [0, 0, 1]);
-		this.gl.uniformMatrix4fv(this.modelViewMatrixUniform, false, this.modelViewMatrix);
+		mat4.translate(
+			this.modelViewMatrix,
+			this.modelViewMatrix,
+			[0.0, 0.0, -20.0]
+		);
+		mat4.rotate(
+			this.modelViewMatrix,
+			this.modelViewMatrix,
+			this.controls.rotation,
+			[0, 1, 0]
+		);
+		mat4.rotate(
+			this.modelViewMatrix,
+			this.modelViewMatrix,
+			this.controls.rotation,
+			[1, 0, 0]
+		);
+		mat4.rotate(
+			this.modelViewMatrix,
+			this.modelViewMatrix,
+			this.controls.rotation,
+			[0, 0, 1]
+		);
+		this.gl.uniformMatrix4fv(
+			this.modelViewMatrixUniform,
+			false,
+			this.modelViewMatrix
+		);
 
 		// Update model-view-projection matrix
 		this.modelViewProjectionMatrix = mat4.create();
-		mat4.multiply(this.modelViewProjectionMatrix, this.projectionMatrix, this.modelViewMatrix);
-		this.gl.uniformMatrix4fv(this.modelViewProjectionMatrixUniform, false, this.modelViewProjectionMatrix);
+		mat4.multiply(
+			this.modelViewProjectionMatrix,
+			this.projectionMatrix,
+			this.modelViewMatrix
+		);
+		this.gl.uniformMatrix4fv(
+			this.modelViewProjectionMatrixUniform,
+			false,
+			this.modelViewProjectionMatrix
+		);
+	}
+
+	/**
+	 * Update a control or controls.
+	 * @param {Object} controls - The controls.
+	 * @returns {void}
+	 */
+	updateControls(controls) {
+		// Assign supplied values to controls
+		for(var key in controls) {
+			// Check if the control exists
+			if(this.controls.hasOwnProperty(key)) {
+				// If value is a number, convert it
+				if(typeof this.controls[key] === 'number') {
+					this.controls[key] = parseFloat(controls[key]);
+				} else if(typeof this.controls[key] === 'string') {
+					this.controls[key] = controls[key].toLowerCase();
+				} else if(typeof this.controls[key] === 'boolean') {
+					this.controls[key] = !!controls[key];
+				} else if(typeof this.controls[key] === 'object') {
+					this.controls[key] = JSON.parse(JSON.stringify(controls[key]));
+				} else {
+					console.warn('Unknown control type: ' + key);
+					//this.controls[key] = controls[key];
+				}
+			} else {
+				console.warn('Unknown control: ' + key);
+			}
+
+			// Handle special cases
+			switch(key) {
+				case 'clearCanvasOnDraw': {
+					if(controls[key]) {
+						// Bind the framebuffer
+						this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.offscreen.framebuffer);
+
+						// Clear the canvas
+						this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+
+						// Unbind the framebuffer
+						this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+					}
+				} break;
+
+				case 'blendMode': {
+					this.gl.enable(this.gl.BLEND);
+					switch(this.controls.blendMode) {
+						case 'additive':
+							this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE);
+							break;
+						case 'subtractive':
+							this.gl.blendFunc(this.gl.ONE_MINUS_DST_COLOR, this.gl.ONE_MINUS_SRC_ALPHA);
+							break;
+						case 'multiply':
+							this.gl.blendFunc(this.gl.DST_COLOR, this.gl.ONE_MINUS_SRC_ALPHA);
+							break;
+						case 'none':
+							this.gl.disable(this.gl.BLEND);
+							break;
+						case 'normal':
+							this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
+							break;
+						default:
+							console.warn('Unknown blend mode: ' + this.controls.blendMode);
+							break;
+					}
+				} break;
+
+				case 'canvasBackgroundColor': {
+					this.canvas.style.backgroundColor = this.controls.canvasBackgroundColor;
+					//@TODO change clear color
+				} break;
+
+				default: {
+					console.warn('Unknown control: ' + key);
+				} break;
+			}
+		}
 	}
 
 	/**
@@ -449,7 +733,12 @@ class GalacticArts {
 		var alpha = offsetMagnitude / offsetMax;
 		color.a = alpha;
 
-		console.assert(color.a >= 0.0 && color.a <= 1.0, 'alpha out of range');
+		console.assert(color.a >= 0.0 && color.a <= 1.0, 'alpha out of range: ' + color.a);
+		if(isNaN(color.a)) {
+			console.log(star);
+			return {r: 0.0, g: 0.0, b: 0.0, a: 0.0};
+		}
+
 
 		//var magnitudeFactor = Math.pow(2.0, magnitude / 2.5);
 		//color.r *= magnitudeFactor;
@@ -501,23 +790,78 @@ class GalacticArts {
 
 		// Return RGB color
 		return { r, g, b, a: 1.0 };
+	}
 
-		//// ChatGPT-4 generated:
-		//// Clamping the input color index to a valid range
-		//bv = Math.max(-0.4, Math.min(2.0, bv));
+	saveAsPNG() {
+		this.controls.savingToPNG = true;
+	}
 
-		//// Linearly mapping color index to a range between 0 and 1
-		//const t = (bv + 0.4) / 2.4;
+	/**
+	 * Output current canvas to PNG.
+	 * @private
+	 * @returns {void}
+	 */
+	//outputToPNG() {
+	//    var gl = this.gl;
 
-		//// Calculate the RGB values
-		//let r = t < 0.5 ? 1 : 2 - 2 * t;
-		//let g = t < 0.5 ? 2 * t : 2 * (1 - t);
-		//let b = t < 0.5 ? 2 * (0.5 - t) : 0;
+	//    // Get WebGL canvas size
+	//    var width = gl.drawingBufferWidth;
+	//    var height = gl.drawingBufferHeight;
 
-		//// Convert the RGB values to 8-bit integers
-		//r = Math.round(r * 255);
-		//g = Math.round(g * 255);
-		//b = Math.round(b * 255);
+	//    // Read pixels from WebGL canvas
+	//    var pixels = new Uint8Array(width * height * 4);
+	//    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+	//    // Create a 2D canvas and get its context
+	//    var canvas2D = document.createElement('canvas');
+	//    canvas2D.width = width;
+	//    canvas2D.height = height;
+	//    var ctx = canvas2D.getContext('2d');
+
+	//    // Put the read pixels into a 2D canvas
+	//    var imageData = ctx.createImageData(width, height);
+	//    imageData.data.set(pixels);
+	//    ctx.putImageData(imageData, 0, 0);
+
+	//    // Flip the image vertically since WebGL has a different coordinate system
+	//    ctx.scale(1, -1);
+	//    ctx.drawImage(canvas2D, 0, -height);
+
+	//    // Get 2D canvas data
+	//    var data = canvas2D.toDataURL('image/png');
+
+	//    // Create image
+	//    var image = new Image();
+	//    image.src = data;
+
+	//    // Create link
+	//    var link = document.createElement('a');
+	//    link.href = image.src;
+
+	//    //@TODO build filename based on controls
+	//    link.download = 'image.png';
+
+	//    // Click link
+	//    link.click();
+	//}
+
+	outputToPNG() {
+		// Get canvas data
+		var data = this.canvas.toDataURL('image/png');
+
+		// Create image
+		var image = new Image();
+		image.src = data;
+
+		// Create link
+		var link = document.createElement('a');
+		link.href = image.src;
+
+		//@TODO build filename based on controls
+		link.download = 'image.png';
+
+		// Click link
+		link.click();
 	}
 }
 
