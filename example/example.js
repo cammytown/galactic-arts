@@ -20,8 +20,8 @@ class Example {
 
 	constructor() {
 		this.galacticArts = new GalacticArts({
-			hygDataPath: '../../data/hygdata_v3.csv',
-			//hygDataPath: 'https://raw.githubusercontent.com/astronexus/HYG-Database/master/hygdata_v3.csv',
+			//hygDataPath: '../../data/hygdata_v3.csv',
+			hygDataPath: 'https://raw.githubusercontent.com/astronexus/HYG-Database/master/hygdata_v3.csv',
 		});
 		this.setupControls();
 		this.controlsFromURL();
