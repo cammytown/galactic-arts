@@ -1,9 +1,27 @@
 //import GalacticArts from '../src/index.js';
 
 class Example {
+	// The controls that are saved in the URL
+	urlControls = [
+		'clearCanvasOnDraw',
+		'blendMode',
+		'canvasBackground',
+		'rotation',
+		'rotationSpeed',
+		'translation',
+		'translationSpeed',
+		'nearPlane',
+		'farPlane',
+		'fov',
+		'starPosScale',
+		//'starColor',
+		//'starSize',
+	];
+
 	constructor() {
 		this.galacticArts = new GalacticArts();
 		this.setupControls();
+		this.controlsFromURL();
 	}
 
 	setupControls() {
@@ -84,12 +102,17 @@ class Example {
 		this.galacticArts.saveAsPNG();
 	}
 
+	updateControls(controls) {
+		this.galacticArts.updateControls(controls);
+		this.controlsToURL();
+	}
+
 	changeRotation(event) {
 		var rotationXInp = document.getElementById('rotation-x');
 		var rotationYInp = document.getElementById('rotation-y');
 		var rotationZInp = document.getElementById('rotation-z');
 
-		this.galacticArts.updateControls({
+		this.updateControls({
 			rotation: {
 				x: parseFloat(rotationXInp.value),
 				y: parseFloat(rotationYInp.value),
@@ -102,7 +125,7 @@ class Example {
 		var rotationSpeedXInp = document.getElementById('rotation-speed-x');
 		var rotationSpeedYInp = document.getElementById('rotation-speed-y');
 		var rotationSpeedZInp = document.getElementById('rotation-speed-z');
-		this.galacticArts.updateControls({
+		this.updateControls({
 			rotationSpeed: {
 				x: parseFloat(rotationSpeedXInp.value),
 				y: parseFloat(rotationSpeedYInp.value),
@@ -115,7 +138,7 @@ class Example {
 		var translationXInp = document.getElementById('translation-x');
 		var translationYInp = document.getElementById('translation-y');
 		var translationZInp = document.getElementById('translation-z');
-		this.galacticArts.updateControls({
+		this.updateControls({
 			translation: {
 				x: parseFloat(translationXInp.value),
 				y: parseFloat(translationYInp.value),
@@ -128,7 +151,7 @@ class Example {
 		var translationSpeedXInp = document.getElementById('translation-speed-x');
 		var translationSpeedYInp = document.getElementById('translation-speed-y');
 		var translationSpeedZInp = document.getElementById('translation-speed-z');
-		this.galacticArts.updateControls({
+		this.updateControls({
 			translationSpeed: {
 				x: parseFloat(translationSpeedXInp.value),
 				y: parseFloat(translationSpeedYInp.value),
@@ -141,7 +164,7 @@ class Example {
 		var starPosScaleXInp = document.getElementById('star-pos-scale-x');
 		var starPosScaleYInp = document.getElementById('star-pos-scale-y');
 		var starPosScaleZInp = document.getElementById('star-pos-scale-z');
-		this.galacticArts.updateControls({
+		this.updateControls({
 			starPosScale: {
 				x: parseFloat(starPosScaleXInp.value),
 				y: parseFloat(starPosScaleYInp.value),
@@ -151,20 +174,20 @@ class Example {
 	}
 
 	changeNearPlane(event) {
-		this.galacticArts.updateControls({
+		this.updateControls({
 			nearPlane: parseFloat(event.target.value)
 		});
 	}
 
 	changeFarPlane(event) {
 		//console.log(event.target.value);
-		this.galacticArts.updateControls({
+		this.updateControls({
 			farPlane: parseFloat(event.target.value)
 		});
 	}
 
 	changeFOV(event) {
-		this.galacticArts.updateControls({
+		this.updateControls({
 			fov: parseFloat(event.target.value)
 		});
 	}
@@ -174,7 +197,7 @@ class Example {
 	//    var scaleXInp = document.getElementById('scale-x');
 	//    var scaleYInp = document.getElementById('scale-y');
 	//    var scaleZInp = document.getElementById('scale-z');
-	//    this.galacticArts.updateControls({
+	//    this.updateControls({
 	//        scale: {
 	//            x: parseFloat(scaleXInp.value),
 	//            y: parseFloat(scaleYInp.value),
@@ -184,7 +207,7 @@ class Example {
 	//}
 
 	clearCanvasOnDraw(event) {
-		this.galacticArts.updateControls({clearCanvasOnDraw: event.target.checked});
+		this.updateControls({clearCanvasOnDraw: event.target.checked});
 	}
 
 	clearCanvas() {
@@ -192,11 +215,94 @@ class Example {
 	}
 
 	changeBlendMode(event) {
-		this.galacticArts.updateControls({blendMode: event.target.value});
+		this.updateControls({blendMode: event.target.value});
 	}
 
 	changeCanvasBackground(event) {
-		this.galacticArts.updateControls({canvasBackgroundColor: event.target.value});
+		this.updateControls({canvasBackgroundColor: event.target.value});
+	}
+
+
+	extractControlType(key) {
+		if(key.indexOf('[') > -1) {
+			var type = key.split('[')[1].split(']')[0];
+		}
+	}
+
+	controlsFromURL() {
+		// Get the URL
+		var url = window.location.href.split('#')[0];
+
+
+		// Get the URL params
+		var params = window.location.href.split('#')[1];
+
+		// Decode the URL params
+		params = decodeURIComponent(params);
+
+		if (params) {
+			params = params.split('&');
+		} else {
+			params = [];
+		}
+
+		// Make a copy of controls object
+		var controls = JSON.parse(JSON.stringify(this.galacticArts.controls));
+
+		// Loop through the URL params and update the controls
+		for (var i = 0; i < params.length; i++) {
+			var param = params[i].split('=');
+			var key = param[0];
+			var value = param[1];
+
+			// Convert the value to the correct type
+			//@REVISIT
+			if (value === 'true') {
+				value = true;
+			} else if (value === 'false') {
+				value = false;
+			} else if (!isNaN(value)) {
+				value = parseFloat(value);
+			}
+
+			if (key.indexOf('[') > -1) {
+				//var type = extractControlType(key);
+				var subKey = key.split('[')[1].split(']')[0];
+				key = key.split('[')[0];
+				controls[key][subKey] = value;
+			} else {
+				controls[key] = value;
+			}
+		}
+
+		// Update the controls
+		this.galacticArts.updateControls(controls);
+	}
+
+	controlsToURL() {
+		// Loop through controls and add them to the URL
+		var controls = this.galacticArts.controls;
+		var url = window.location.href.split('#')[0];
+		var params = [];
+		for (var key of this.urlControls) {
+			var value = controls[key];
+			if (typeof value === 'object') {
+				for (var subKey in value) {
+					params.push(key + '[' + subKey + ']=' + value[subKey]);
+				}
+			} else {
+				params.push(key + '=' + value);
+			}
+		}
+		url += '#' + params.join('&');
+
+		// Encode the URL
+		url = encodeURI(url);
+
+		console.log(url);
+
+		// Update the URL
+		window.history.pushState({}, '', url);
 	}
 }
 

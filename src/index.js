@@ -4,6 +4,9 @@ var mat4 = glMatrix.mat4; //@TODO hack
 class GalacticArts {
 	canvas = document.getElementById('galactic-canvas');
 	gl = this.canvas.getContext('webgl2');
+	glInitialized = false;
+
+	updateControlsQueue = [];
 
 	// Background (last frame) shaders
 	backgroundShaderProgram = null;
@@ -221,6 +224,7 @@ class GalacticArts {
 		// Check for errors
 		if(this.gl.getError() != this.gl.NO_ERROR) {
 			console.log('Error initializing WebGL');
+			console.log(this.gl.getError());
 		}
 
 		this.setupUniforms();
@@ -242,6 +246,13 @@ class GalacticArts {
 
 		// Enable blending
 		this.gl.enable(this.gl.BLEND);
+
+		// Set initialized to true
+		this.glInitialized = true;
+
+		// Run any queued control updates
+		this.updateControls();
+
 	}
 
 	compileShaders() {
@@ -645,6 +656,8 @@ class GalacticArts {
 			gl.bindFramebuffer(gl.FRAMEBUFFER, this.offscreen.framebuffer);
 		}
 
+		console.log(this.controls.clearCanvasOnDraw)
+
 		this.drawStars();
 
 		if(!this.controls.clearCanvasOnDraw) {
@@ -748,25 +761,66 @@ class GalacticArts {
 	 * @returns {void}
 	 */
 	updateControls(controls) {
+		// If GL is not initialized, queue update
+		if(!this.glInitialized) {
+			this.updateControlsQueue.push(controls);
+
+			return;
+		}
+
+		// If no controls are supplied, process queued updates
+		//@REVISIT kinda weird architecture
+		if(!controls) {
+			// Process queued updates
+			for(var controls of this.updateControlsQueue) {
+				console.log('Processing queued update');
+				console.log(controls);
+				this.updateControls(controls);
+			}
+			this.updateControlsQueue = [];
+
+			return;
+		}
+
 		// Assign supplied values to controls
 		for(var key in controls) {
 			// Check if the control exists
 			if(this.controls.hasOwnProperty(key)) {
-				this.controls[key] = controls[key];
+				//this.controls[key] = controls[key];
 
-				// If value is a number, convert it
-				//if(typeof this.controls[key] === 'number') {
-				//    this.controls[key] = parseFloat(controls[key]);
-				//} else if(typeof this.controls[key] === 'string') {
-				//    this.controls[key] = controls[key].toLowerCase();
-				//} else if(typeof this.controls[key] === 'boolean') {
-				//    this.controls[key] = !!controls[key];
-				//} else if(typeof this.controls[key] === 'object') {
-				//    this.controls[key] = JSON.parse(JSON.stringify(controls[key]));
-				//} else {
-				//    console.warn('Unknown control type: ' + key);
-				//    //this.controls[key] = controls[key];
-				//}
+				// Convert to correct type
+				//@TODO revisit architecture
+				if(typeof this.controls[key] === 'number') {
+					this.controls[key] = parseFloat(controls[key]);
+				} else if(typeof this.controls[key] === 'string') {
+					this.controls[key] = controls[key].toLowerCase();
+				} else if(typeof this.controls[key] === 'boolean') {
+					this.controls[key] = !!controls[key];
+				} else if(typeof this.controls[key] === 'object') {
+					//this.controls[key] = JSON.parse(JSON.stringify(controls[key]));
+
+					// Convert properties to correct type
+					//@TODO scaffolding; obvious redundancy
+					for(var prop in controls[key]) {
+						if(this.controls[key].hasOwnProperty(prop)) {
+							if(typeof this.controls[key][prop] === 'number') {
+								this.controls[key][prop] = parseFloat(controls[key][prop]);
+							} else if(typeof this.controls[key][prop] === 'string') {
+								this.controls[key][prop] = controls[key][prop].toLowerCase();
+								console.log(key + '.' + prop + ': ' + this.controls[key][prop]);
+							} else if(typeof this.controls[key][prop] === 'boolean') {
+								this.controls[key][prop] = !!controls[key][prop];
+							} else {
+								console.warn('Unknown control type: ' + key + '.' + prop);
+							}
+						} else {
+							console.warn('Unknown control: ' + key + '.' + prop);
+						}
+					}
+				} else {
+					console.warn('Unknown control type: ' + key);
+					//this.controls[key] = controls[key];
+				}
 			} else {
 				console.warn('Unknown control: ' + key);
 			}
@@ -774,16 +828,20 @@ class GalacticArts {
 			// Handle special cases
 			switch(key) {
 				case 'clearCanvasOnDraw': {
-					if(controls[key]) {
-						// Bind the framebuffer
-						this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.offscreen.framebuffer);
+					// If framebuffer is not initialized, skip
+					//@REVISIT best solution?
+					//if(!this.offscreen) {
+					//    continue;
+					//}
 
-						// Clear the canvas
-						this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+					// Bind the framebuffer
+					this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.offscreen.framebuffer);
 
-						// Unbind the framebuffer
-						this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-					}
+					// Clear the canvas
+					this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+
+					// Unbind the framebuffer
+					this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
 				} break;
 
 				case 'farPlane':
@@ -848,9 +906,8 @@ class GalacticArts {
 					//@TODO change clear color
 				} break;
 
-				default: {
-					console.warn('Unknown control: ' + key);
-				} break;
+				//default: {
+				//} break;
 			}
 		}
 	}
