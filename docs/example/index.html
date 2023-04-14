@@ -2,8 +2,8 @@
 <html>
 <head>
 	<meta charset="utf-8">
-	<script src="../node_modules/gl-matrix/gl-matrix-min.js"></script>
-	<script src="../src/index.js"></script>
+	<script src="../../node_modules/gl-matrix/gl-matrix-min.js"></script>
+	<script src="../../src/index.js"></script>
 	<!--<script type="module" src="../src/index.js"></script>-->
 	<script src="example.js" type="module"></script>
 	<link rel="stylesheet" href="example.css">
@@ -11,55 +11,105 @@
 </head>
 
 <body>
-	<canvas id="galactic-canvas" width="1920" height="1080"></canvas>
-
 	<h1>Galactic Arts</h1>
 
+	<canvas id="galactic-canvas" width="1920" height="1080"></canvas>
+
 	<div class="controls">
+		<div class="full">
+			<div class="control">
+				<button id="save-to-png">Save to PNG</button>
+			</div>
+
+			<div class="control">
+				<input type="checkbox" id="clear-canvas-on-draw" checked>
+				<label for="clear-canvas-on-draw">Clear canvas on draw</label>
+			</div>
+
+			<div class="control">
+				<label for="blend-mode">Blend mode</label>
+				<select id="blend-mode">
+					<option value="none">None</option>
+					<option value="normal">Normal</option>
+					<!--<option value="multiply">Multiply</option>-->
+					<option value="additive">Additive</option>
+					<option value="subtractive">Subtractive</option>
+
+					<!--<option value="screen">Screen</option>-->
+					<!--<option value="overlay">Overlay</option>-->
+					<!--<option value="darken">Darken</option>-->
+					<!--<option value="lighten">Lighten</option>-->
+					<!--<option value="color-dodge">Color dodge</option>-->
+					<!--<option value="color-burn">Color burn</option>-->
+					<!--<option value="hard-light">Hard light</option>-->
+					<!--<option value="soft-light">Soft light</option>-->
+					<!--<option value="difference">Difference</option>-->
+					<!--<option value="exclusion">Exclusion</option>-->
+					<!--<option value="hue">Hue</option>-->
+					<!--<option value="saturation">Saturation</option>-->
+					<!--<option value="color">Color</option>-->
+					<!--<option value="luminosity">Luminosity</option>-->
+				</select>
+			</div>
+
+			<div class="control">
+				<label for="canvas-background">Canvas background</label>
+				<input type="color" id="canvas-background" value="#000000">
+			</div>
+		</div>
+
+		<div class="control">                                                     
+			<label>Star position scale</label>                                                       
+			<input type="range" id="star-pos-scale-x" min="-1" max="1" step="0.01" value="1.0">
+			<input type="range" id="star-pos-scale-y" min="-1" max="1" step="0.01" value="1.0">
+			<input type="range" id="star-pos-scale-z" min="-1" max="1" step="0.01" value="1.0">
+		</div>                                                                         
+
 		<div class="control">
-			<button id="save-to-png">Save to PNG</button>
+			<label>Translation</label>
+			<input type="range" id="translation-x" min="-500" max="500" step="1" value="0.0">
+			<input type="range" id="translation-y" min="-500" max="500" step="1" value="0.0">
+			<input type="range" id="translation-z" min="-500" max="500" step="1" value="0.0">
 		</div>
 
 		<div class="control">
-			<label for="rotation">Rotation speed</label>
-			<input type="range" id="rotation-speed" min="0" max="0.05" step="0.001">
+			<label>Translation speed</label>
+			<input type="range" id="translation-speed-x" min="-5" max="5" step="0.01" value="0.0">
+			<input type="range" id="translation-speed-y" min="-5" max="5" step="0.01" value="0.0">
+			<input type="range" id="translation-speed-z" min="-5" max="5" step="0.01" value="0.0">
+		</div>
+
+		<div class="full">
+			<div class="control half">
+				<label>Rotation</label>
+				<input type="range" id="rotation-x" min="0" max="2" step="0.0001" value="0.0">
+				<input type="range" id="rotation-y" min="0" max="2" step="0.0001" value="0.0">
+				<input type="range" id="rotation-z" min="0" max="2" step="0.0001" value="0.0">
+			</div>
+
+			<div class="control half">
+				<label>Rotation speed</label>
+				<input type="range" id="rotation-speed-x" min="0" max="0.05" step="0.0001" value="0.0">
+				<input type="range" id="rotation-speed-y" min="0" max="0.05" step="0.0001" value="0.0">
+				<input type="range" id="rotation-speed-z" min="0" max="0.05" step="0.0001" value="0.0">
+			</div>
 		</div>
 
 		<div class="control">
-			<label for="clear-canvas-on-draw">Clear canvas on draw</label>
-			<input type="checkbox" id="clear-canvas-on-draw" checked>
+			<label>Clipping Planes</label>
+			<input type="range" id="near-plane" min="0" max="1000" step="0.01" value="0.1">
+			<input type="range" id="far-plane" min="0" max="20000" step="1" value="1000.0">
 		</div>
 
 		<div class="control">
-			<label for="blend-mode">Blend mode</label>
-			<select id="blend-mode">
-				<option value="none">None</option>
-				<option value="normal">Normal</option>
-				<option value="multiply">Multiply</option>
-				<option value="additive">Additive</option>
-				<option value="subtractive">Subtractive</option>
-
-				<option value="screen">Screen</option>
-				<option value="overlay">Overlay</option>
-				<option value="darken">Darken</option>
-				<option value="lighten">Lighten</option>
-				<option value="color-dodge">Color dodge</option>
-				<option value="color-burn">Color burn</option>
-				<option value="hard-light">Hard light</option>
-				<option value="soft-light">Soft light</option>
-				<option value="difference">Difference</option>
-				<option value="exclusion">Exclusion</option>
-				<option value="hue">Hue</option>
-				<option value="saturation">Saturation</option>
-				<option value="color">Color</option>
-				<option value="luminosity">Luminosity</option>
-			</select>
+			<label>FOV</label>
+			<input type="range" id="fov" min="0" max="180" step="0.01" value="45.0">
 		</div>
 
-		<div class="control">
-			<label for="canvas-background">Canvas background</label>
-			<input type="color" id="canvas-background" value="#000000">
-		</div>
+		<!--<div class="control full">                                                  -->
+		<!--    <label>Zoom</label>                                                     -->
+		<!--    <input type="range" id="zoom" min="0" max="2" step="0.0001" value="1.0">-->
+		<!--</div>                                                                      -->
 
 		<!--<tr>                                                                -->
 		<!--    <td>                                                            -->

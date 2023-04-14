@@ -30,14 +30,68 @@ class GalacticArts {
 	modelViewMatrix = null;
 	modelViewProjectionMatrix = null;
 
+	// Attributes
+	positionAttribute = null;
+	colorAttribute = null;
+
+	// Uniforms
+	projectionMatrixUniform = null;
+	modelViewProjectionMatrixUniform = null;
+	modelViewMatrixUniform = null;
+	normalMatrixUniform = null;
+	colorUniform = null;
+	starPosScaleUniform = null;
 
 	// Canvas controls
 	controls = {
+		// Clear canvas on draw or draw each frame over the last
 		clearCanvasOnDraw: true,
-		rotation: 0,
-		rotationSpeed: 0.0,
+
+		// Blend mode
 		blendMode: 'none',
+
+		// Save to PNG
 		savingToPNG: false,
+
+		// Star properties
+		starPosScale: {
+			x: 1,
+			y: 1,
+			z: 1,
+		},
+
+		// Camera
+		rotation: {
+			x: 0,
+			y: 0,
+			z: 0,
+		},
+		rotationSpeed: {
+			x: 0,
+			y: 0,
+			z: 0,
+		},
+		translation: {
+			x: 0,
+			y: 0,
+			z: 0,
+		},
+		translationSpeed: {
+			x: 0,
+			y: 0,
+			z: 0,
+		},
+		farPlane: 1000,
+		nearPlane: 0.1,
+		fov: 45,
+		//aspect: 1,
+
+		//scale: {
+		//    x: 1,
+		//    y: 1,
+		//    z: 1,
+		//},
+
 	}
 
 	// Stars
@@ -62,7 +116,9 @@ class GalacticArts {
 		// http://www.astronexus.com/hyg
 		//@TODO revisit is this necessary for a local file? use fetch?
 		var xhr = new XMLHttpRequest();
-		xhr.open('GET', '../data/hygdata_v3.csv', true);
+
+		//@TODO temporary:
+		xhr.open('GET', '../../data/hygdata_v3.csv', true);
 		xhr.onload = function() {
 			if(xhr.status === 200) {
 				var starRows = xhr.responseText.split('\n');
@@ -195,12 +251,23 @@ class GalacticArts {
 			attribute vec4 aVertexPosition;
 			attribute vec4 aVertexColor;
 			varying vec4 vColor;
+			uniform vec4 uStarPosScale;
 
 			uniform mat4 uModelViewMatrix;
 			uniform mat4 uProjectionMatrix;
 
+			//uniform float uFarPlane;
+			//uniform float uNearPlane;
+
 			void main(void) {
-				gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+				vec4 scaledPos = aVertexPosition * uStarPosScale;
+
+				//// Update clipping planes
+				//mat4 updatedProjectionMatrix = uProjectionMatrix;
+				//updatedProjectionMatrix[2][2] = (uFarPlane + uNearPlane) / (uFarPlane - uNearPlane);
+				//updatedProjectionMatrix[2][3] = (2.0 * uFarPlane * uNearPlane) / (uFarPlane - uNearPlane);
+
+				gl_Position = uProjectionMatrix * uModelViewMatrix * scaledPos;
 				vColor = aVertexColor;
 			}
 		`);
@@ -316,10 +383,10 @@ class GalacticArts {
 		this.projectionMatrix = mat4.create();
 		mat4.perspective(
 			this.projectionMatrix,
-			45,
+			this.controls.fov * Math.PI / 180,
 			this.canvas.width / this.canvas.height,
-			0.1,
-			100.0
+			this.controls.nearPlane,
+			this.controls.farPlane
 		);
 
 		// Set view matrix
@@ -351,10 +418,12 @@ class GalacticArts {
 		// Add stars to vertex buffer
 		var vertices = [];
 		for(var star of this.stars) {
-			var scale = 0.22;
-
 			// Add star to vertex buffer
-			vertices.push(star.x * scale, star.y * scale, star.z * scale);
+			vertices.push(
+				star.x * this.controls.starPosScale.x,
+				star.y * this.controls.starPosScale.y,
+				star.z * this.controls.starPosScale.z
+			);
 		}
 		this.gl.bufferData(
 			this.gl.ARRAY_BUFFER,
@@ -416,6 +485,15 @@ class GalacticArts {
 	}
 
 	setupUniforms() {
+		this.starPosScaleUniform = this.gl.getUniformLocation(this.shaderProgram, "uStarPosScale");
+		this.gl.uniform4f(
+			this.starPosScaleUniform,
+			this.controls.starPosScale.x,
+			this.controls.starPosScale.y,
+			this.controls.starPosScale.z,
+			1
+		);
+
 		// Set up model-view matrix uniform
 		this.modelViewMatrixUniform = this.gl.getUniformLocation(
 			this.shaderProgram,
@@ -448,6 +526,13 @@ class GalacticArts {
 			false,
 			this.modelViewProjectionMatrix
 		);
+
+		// Setup clipping plane uniforms
+		//this.farPlaneUniform = this.gl.getUniformLocation(this.shaderProgram, "uFarPlane");
+		//this.gl.uniform1f(this.farPlaneUniform, this.controls.farPlane);
+
+		//this.nearPlaneUniform = this.gl.getUniformLocation(this.shaderProgram, "uNearPlane");
+		//this.gl.uniform1f(this.nearPlaneUniform, this.controls.nearPlane);
 	}
 
 	/**
@@ -582,7 +667,6 @@ class GalacticArts {
 		//this.stats.update();
 	}
 
-
 	/**
 	 * Update rotation.
 	 * @private
@@ -590,31 +674,52 @@ class GalacticArts {
 	 */
 	updateRotation() {
 		// Update rotation
-		this.controls.rotation += this.controls.rotationSpeed;
+		//this.controls.rotation += this.controls.rotationSpeed;
+		this.controls.rotation.x += this.controls.rotationSpeed.x;
+		this.controls.rotation.y += this.controls.rotationSpeed.y;
+		this.controls.rotation.z += this.controls.rotationSpeed.z;
+
+		// Update translation
+		this.controls.translation.x += this.controls.translationSpeed.x;
+		this.controls.translation.y += this.controls.translationSpeed.y;
+		this.controls.translation.z += this.controls.translationSpeed.z;
+
+		this.gl.uniform4f(
+			this.starPosScaleUniform,
+			this.controls.starPosScale.x,
+			this.controls.starPosScale.y,
+			this.controls.starPosScale.z,
+			1
+		);
 
 		// Update model-view matrix
 		this.modelViewMatrix = mat4.create();
 		mat4.translate(
 			this.modelViewMatrix,
 			this.modelViewMatrix,
-			[0.0, 0.0, -20.0]
+			[
+				this.controls.translation.x,
+				this.controls.translation.y,
+				this.controls.translation.z
+			]
+			//[0.0, 0.0, -20.0]
 		);
 		mat4.rotate(
 			this.modelViewMatrix,
 			this.modelViewMatrix,
-			this.controls.rotation,
+			this.controls.rotation.x,
 			[0, 1, 0]
 		);
 		mat4.rotate(
 			this.modelViewMatrix,
 			this.modelViewMatrix,
-			this.controls.rotation,
+			this.controls.rotation.y,
 			[1, 0, 0]
 		);
 		mat4.rotate(
 			this.modelViewMatrix,
 			this.modelViewMatrix,
-			this.controls.rotation,
+			this.controls.rotation.z,
 			[0, 0, 1]
 		);
 		this.gl.uniformMatrix4fv(
@@ -647,19 +752,21 @@ class GalacticArts {
 		for(var key in controls) {
 			// Check if the control exists
 			if(this.controls.hasOwnProperty(key)) {
+				this.controls[key] = controls[key];
+
 				// If value is a number, convert it
-				if(typeof this.controls[key] === 'number') {
-					this.controls[key] = parseFloat(controls[key]);
-				} else if(typeof this.controls[key] === 'string') {
-					this.controls[key] = controls[key].toLowerCase();
-				} else if(typeof this.controls[key] === 'boolean') {
-					this.controls[key] = !!controls[key];
-				} else if(typeof this.controls[key] === 'object') {
-					this.controls[key] = JSON.parse(JSON.stringify(controls[key]));
-				} else {
-					console.warn('Unknown control type: ' + key);
-					//this.controls[key] = controls[key];
-				}
+				//if(typeof this.controls[key] === 'number') {
+				//    this.controls[key] = parseFloat(controls[key]);
+				//} else if(typeof this.controls[key] === 'string') {
+				//    this.controls[key] = controls[key].toLowerCase();
+				//} else if(typeof this.controls[key] === 'boolean') {
+				//    this.controls[key] = !!controls[key];
+				//} else if(typeof this.controls[key] === 'object') {
+				//    this.controls[key] = JSON.parse(JSON.stringify(controls[key]));
+				//} else {
+				//    console.warn('Unknown control type: ' + key);
+				//    //this.controls[key] = controls[key];
+				//}
 			} else {
 				console.warn('Unknown control: ' + key);
 			}
@@ -678,6 +785,39 @@ class GalacticArts {
 						this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
 					}
 				} break;
+
+				case 'farPlane':
+				case 'nearPlane':
+				case 'fov': {
+					//this.gl.uniform1f(this.farPlaneUniform, this.controls.farPlane);
+
+					//@TODO probably move this to a separate function
+					// Update projection matrix
+					this.projectionMatrix = mat4.create();
+					mat4.perspective(
+						this.projectionMatrix,
+						this.controls.fov * Math.PI / 180,
+						this.canvas.width / this.canvas.height,
+						this.controls.nearPlane,
+						this.controls.farPlane
+					);
+					this.gl.uniformMatrix4fv(
+						this.projectionMatrixUniform,
+						false,
+						this.projectionMatrix
+					);
+				} break;
+
+					//this.gl.uniform1f(this.nearPlaneUniform, this.controls.nearPlane);
+				//} break;
+
+				//case 'rotationSpeed': {
+				//    this.controls.rotationSpeed = {
+				//        x: parseFloat(controls[key].x),
+				//        y: parseFloat(controls[key].y),
+				//        z: parseFloat(controls[key].z)
+				//    };
+				//} break;
 
 				case 'blendMode': {
 					this.gl.enable(this.gl.BLEND);
