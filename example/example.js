@@ -280,6 +280,105 @@ class Example {
 
 		// Update the controls
 		this.galacticArts.updateControls(controls);
+
+		// Update the controls on the page
+		this.controlsToPage(controls);
+	}
+
+	controlsToPage(controls = this.galacticArts.controls) {
+		// Loop through controls and update the page
+		for (var key of this.urlControls) {
+			var value = controls[key];
+
+			console.log(key, value);
+
+			//@TODO I really hate this architecture; I guess we should create some Control class
+			switch(key) {
+				case 'blendMode':
+					var blendModeInp = document.getElementById('blend-mode');
+					blendModeInp.value = value;
+					break;
+				case 'canvasBackgroundColor':
+					var canvasBackgroundColorInp = document.getElementById('canvas-background-color');
+					canvasBackgroundColorInp.value = value;
+					break;
+				case 'clearCanvasOnDraw':
+					var clearCanvasOnDrawInp = document.getElementById('clear-canvas-on-draw');
+					clearCanvasOnDrawInp.checked = value;
+					break;
+				case 'fov':
+					var fovInp = document.getElementById('fov');
+					fovInp.value = value;
+					break;
+				case 'nearPlane':
+					var nearPlaneInp = document.getElementById('near-plane');
+					nearPlaneInp.value = value;
+					break;
+				case 'farPlane':
+					var farPlaneInp = document.getElementById('far-plane');
+					farPlaneInp.value = value;
+					break;
+				case 'starPosScale':
+					var starPosScaleXInp = document.getElementById('star-pos-scale-x');
+					var starPosScaleYInp = document.getElementById('star-pos-scale-y');
+					var starPosScaleZInp = document.getElementById('star-pos-scale-z');
+					starPosScaleXInp.value = value.x;
+					starPosScaleYInp.value = value.y;
+					starPosScaleZInp.value = value.z;
+					break;
+				
+				case 'rotation':
+					var rotationXInp = document.getElementById('rotation-x');
+					var rotationYInp = document.getElementById('rotation-y');
+					var rotationZInp = document.getElementById('rotation-z');
+					rotationXInp.value = value.x;
+					rotationYInp.value = value.y;
+					rotationZInp.value = value.z;
+					break;
+				case 'rotationSpeed':
+					var rotationSpeedXInp = document.getElementById('rotation-speed-x');
+					var rotationSpeedYInp = document.getElementById('rotation-speed-y');
+					var rotationSpeedZInp = document.getElementById('rotation-speed-z');
+					rotationSpeedXInp.value = value.x;
+					rotationSpeedYInp.value = value.y;
+					rotationSpeedZInp.value = value.z;
+					break;
+				case 'translation':
+					var translationXInp = document.getElementById('translation-x');
+					var translationYInp = document.getElementById('translation-y');
+					var translationZInp = document.getElementById('translation-z');
+					translationXInp.value = value.x;
+					translationYInp.value = value.y;
+					translationZInp.value = value.z;
+					break;
+				case 'translationSpeed':
+					var translationSpeedXInp = document.getElementById('translation-speed-x');
+					var translationSpeedYInp = document.getElementById('translation-speed-y');
+					var translationSpeedZInp = document.getElementById('translation-speed-z');
+					translationSpeedXInp.value = value.x;
+					translationSpeedYInp.value = value.y;
+					translationSpeedZInp.value = value.z;
+					break;
+			}
+
+			//if (typeof value === 'object') {
+			//    for (var subKey in value) {
+			//        var inp = document.getElementById(key + '-' + subKey);
+			//        if (inp) {
+			//            inp.value = value[subKey];
+			//        } else {
+			//            console.warn('No input found for ' + key + '-' + subKey);
+			//        }
+			//    }
+			//} else {
+			//    var inp = document.getElementById(key);
+			//    if (inp) {
+			//        inp.value = value;
+			//    } else {
+			//        console.warn('No input found for ' + key);
+			//    }
+			//}
+		}
 	}
 
 	controlsToURL() {
