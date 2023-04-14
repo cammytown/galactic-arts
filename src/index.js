@@ -2,6 +2,8 @@
 var mat4 = glMatrix.mat4; //@TODO hack
 
 class GalacticArts {
+	hygDataPath = "";
+
 	canvas = document.getElementById('galactic-canvas');
 	gl = this.canvas.getContext('webgl2');
 	glInitialized = false;
@@ -103,7 +105,14 @@ class GalacticArts {
 	// Value ranges
 	ranges = {};
 
-	constructor() {
+	constructor(options = {}) {
+		// Set options
+		for(var option in options) {
+			if(this.hasOwnProperty(option)) {
+				this[option] = options[option];
+			}
+		}
+
 		// Load HYG star data
 		this.loadStars();
 
@@ -114,14 +123,27 @@ class GalacticArts {
 		//this.draw();
 	}
 
+	showLoadingMessage() {
+		this.canvas.style.opacity = 0.5;
+		this.canvas.style.cursor = 'wait';
+	}
+
+	hideLoadingMessage() {
+		this.canvas.style.opacity = 1;
+		this.canvas.style.cursor = 'default';
+	}
+
 	loadStars() {
+		// Show loading message
+		this.showLoadingMessage();
+
 		// Load HYG star data
 		// http://www.astronexus.com/hyg
 		//@TODO revisit is this necessary for a local file? use fetch?
 		var xhr = new XMLHttpRequest();
 
 		//@TODO temporary:
-		xhr.open('GET', '../../data/hygdata_v3.csv', true);
+		xhr.open('GET', this.hygDataPath, true);
 		xhr.onload = function() {
 			if(xhr.status === 200) {
 				var starRows = xhr.responseText.split('\n');
@@ -188,6 +210,7 @@ class GalacticArts {
 				//console.log(stars.length);
 
 				this.initializeGL();
+				this.hideLoadingMessage();
 				this.draw();
 			} else {
 				console.error('Error loading stars');
