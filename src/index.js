@@ -88,6 +88,7 @@ class GalacticArts {
 		},
 		farPlane: 1000,
 		nearPlane: 0.1,
+
 		fov: 45,
 		//aspect: 1,
 
@@ -106,6 +107,10 @@ class GalacticArts {
 	ranges = {};
 
 	constructor(options = {}) {
+		//@REVISIT; if we do it this way we probably need to listen for resize
+		this.canvas.width = this.canvas.clientWidth;
+		this.canvas.height = this.canvas.clientHeight;
+
 		// Set options
 		for(var option in options) {
 			if(this.hasOwnProperty(option)) {
@@ -688,8 +693,6 @@ class GalacticArts {
 			gl.bindFramebuffer(gl.FRAMEBUFFER, this.offscreen.framebuffer);
 		}
 
-		console.log(this.controls.clearCanvasOnDraw)
-
 		this.drawStars();
 
 		if(!this.controls.clearCanvasOnDraw) {
@@ -805,8 +808,6 @@ class GalacticArts {
 		if(!controls) {
 			// Process queued updates
 			for(var controls of this.updateControlsQueue) {
-				console.log('Processing queued update');
-				console.log(controls);
 				this.updateControls(controls);
 			}
 			this.updateControlsQueue = [];
