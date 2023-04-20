@@ -109,7 +109,16 @@ class GalacticArts {
 		// Set options
 		for(var option in options) {
 			if(this.hasOwnProperty(option)) {
-				this[option] = options[option];
+				switch(option) {
+					case 'hygDataPath':
+						this[option] = options[option];
+						break;
+					case 'controls':
+						this.updateControls(options[option]);
+						break;
+					default:
+						console.warn('Unknown option: ' + option);
+				}
 			}
 		}
 
